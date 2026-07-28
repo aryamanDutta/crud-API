@@ -1,3 +1,4 @@
+import sqlite3
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -8,7 +9,6 @@ app = FastAPI(
     description="A simple CRUD API for managing tasks.",
     version="1.0"
 )
-
 
 # -----------------------------
 # Convert FastAPI's default 422
@@ -51,26 +51,35 @@ class TaskUpdate(BaseModel):
 
 
 # -----------------------------
-# In-memory Database
+# SQLite Database
 # -----------------------------
-tasks = [
-    {
-        "id": 1,
-        "title": "Learn FastAPI",
-        "done": False
-    },
-    {
-        "id": 2,
-        "title": "Build CRUD API",
-        "done": False
-    },
-    {
-        "id": 3,
-        "title": "Push to GitHub",
-        "done": False
-    }
-]
+conn = sqlite3.connect("tasks.db", check_same_thread=False)
+conn.row_factory = sqlite3.Row
+cursor = conn.cursor()
 
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS tasks(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    done INTEGER NOT NULL
+)
+""")
+
+conn.commit()
+
+cursor.execute("SELECT COUNT(*) FROM tasks")
+count = cursor.fetchone()[0]
+
+if count == 0:
+    cursor.executemany(
+        "INSERT INTO tasks(title, done) VALUES(?, ?)",
+        [
+            ("Learn FastAPI", 0),
+            ("Build CRUD API", 0),
+            ("Push to GitHub", 0)
+        ]
+    )
+    conn.commit()
 
 # -----------------------------
 # Root Endpoint
@@ -101,7 +110,18 @@ def health():
 # -----------------------------
 @app.get("/tasks", summary="Get All Tasks")
 def get_tasks():
-    return tasks
+
+    cursor.execute("SELECT * FROM tasks")
+    rows = cursor.fetchall()
+
+    return [
+        {
+            "id": row["id"],
+            "title": row["title"],
+            "done": bool(row["done"])
+        }
+        for row in rows
+    ]
 
 
 # -----------------------------
@@ -110,14 +130,24 @@ def get_tasks():
 @app.get("/tasks/{task_id}", summary="Get Task By ID")
 def get_task(task_id: int):
 
-    for task in tasks:
-        if task["id"] == task_id:
-            return task
-
-    raise HTTPException(
-        status_code=404,
-        detail=f"Task {task_id} not found"
+    cursor.execute(
+        "SELECT * FROM tasks WHERE id = ?",
+        (task_id,)
     )
+
+    row = cursor.fetchone()
+
+    if row is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Task {task_id} not found"
+        )
+
+    return {
+        "id": row["id"],
+        "title": row["title"],
+        "done": bool(row["done"])
+    }
 
 
 # -----------------------------
@@ -126,16 +156,20 @@ def get_task(task_id: int):
 @app.post("/tasks", status_code=201, summary="Create Task")
 def create_task(task: TaskCreate):
 
-    new_task = {
-        "id": len(tasks) + 1,
+    cursor.execute(
+        "INSERT INTO tasks(title, done) VALUES(?, ?)",
+        (task.title, 0)
+    )
+
+    conn.commit()
+
+    task_id = cursor.lastrowid
+
+    return {
+        "id": task_id,
         "title": task.title,
         "done": False
     }
-
-    tasks.append(new_task)
-
-    return new_task
-
 
 # -----------------------------
 # Update Task
@@ -143,17 +177,37 @@ def create_task(task: TaskCreate):
 @app.put("/tasks/{task_id}", summary="Update Task")
 def update_task(task_id: int, updated_task: TaskUpdate):
 
-    for task in tasks:
-
-        if task["id"] == task_id:
-            task["title"] = updated_task.title
-            task["done"] = updated_task.done
-            return task
-
-    raise HTTPException(
-        status_code=404,
-        detail=f"Task {task_id} not found"
+    cursor.execute(
+        "SELECT * FROM tasks WHERE id = ?",
+        (task_id,)
     )
+
+    if cursor.fetchone() is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Task {task_id} not found"
+        )
+
+    cursor.execute(
+        """
+        UPDATE tasks
+        SET title = ?, done = ?
+        WHERE id = ?
+        """,
+        (
+            updated_task.title,
+            int(updated_task.done),
+            task_id
+        )
+    )
+
+    conn.commit()
+
+    return {
+        "id": task_id,
+        "title": updated_task.title,
+        "done": updated_task.done
+    }
 
 
 # -----------------------------
@@ -162,12 +216,22 @@ def update_task(task_id: int, updated_task: TaskUpdate):
 @app.delete("/tasks/{task_id}", status_code=204, summary="Delete Task")
 def delete_task(task_id: int):
 
-    for index, task in enumerate(tasks):
+    cursor.execute(
+        "SELECT * FROM tasks WHERE id = ?",
+        (task_id,)
+    )
 
-        if task["id"] == task_id:
-            tasks.pop(index)
-            return
+    if cursor.fetchone() is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Task {task_id} not found"
+        )
 
-    raise HTTPException(
-        status_code=404,
-        detail=f"Task {task_id} not found")
+    cursor.execute(
+        "DELETE FROM tasks WHERE id = ?",
+        (task_id,)
+    )
+
+    conn.commit()
+
+    return
