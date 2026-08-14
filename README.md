@@ -1,214 +1,98 @@
-# Task API - SQLite CRUD API
+# Task API — PostgreSQL + Docker
 
-A simple CRUD (Create, Read, Update, Delete) REST API built using **FastAPI** and **SQLite**. This project demonstrates how to replace an in-memory data store with a persistent SQLite database while keeping the API endpoints unchanged.
+A simple CRUD API built with **FastAPI** and **PostgreSQL**, with the database running in Docker.
 
----
+The API routes remain unchanged from the previous version; only the storage layer was replaced.
 
-## Features
+## Tech Stack
 
-- Create new tasks
-- Retrieve all tasks
-- Retrieve a task by ID
-- Update existing tasks
-- Delete tasks
-- SQLite database persistence
-- Automatic database and table creation
-- Automatic seeding of sample tasks on first run
-- Input validation with proper HTTP status codes
-- Interactive API documentation using Swagger UI
-
----
-
-## Technologies Used
-
-- Python 3.11+
+- Python
 - FastAPI
-- SQLite (sqlite3)
-- Uvicorn
+- PostgreSQL 16
+- psycopg
+- Docker & Docker Compose
 
----
+## Architecture
 
-## Why SQLite?
-
-SQLite was chosen because:
-
-- It is lightweight and serverless.
-- No separate database installation is required.
-- The database is stored in a single file (`tasks.db`).
-- Data persists even after restarting the application.
-- Perfect for small backend applications and learning SQL.
-
----
-
-## Database
-
-The application automatically creates:
-
+```text
+Client → FastAPI → PostgreSQL
+                    ↓
+              Docker Volume
 ```
-tasks.db
-```
-
-on the first run.
-
-It also automatically creates the `tasks` table if it does not exist and inserts three sample tasks only when the table is empty.
-
-Table structure:
-
-| Column | Type |
-|---------|------|
-| id | INTEGER PRIMARY KEY AUTOINCREMENT |
-| title | TEXT |
-| done | BOOLEAN |
-
----
-
-## Project Structure
-
-```
-TaskAPI/
-│
-├── images/
-│   ├── swagger-ui.png
-│   └── database-viewer.png
-│
-├── main.py
-├── requirements.txt
-├── tasks.db
-├── README.md
-└── .gitignore
-```
-
----
-
-## Installation
-
-Clone the repository
-
-```bash
-git clone <repository-url>
-cd TaskAPI
-```
-
-Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-Run the application
-
-```bash
-uvicorn main:app --reload
-```
-
-Open Swagger UI
-
-```
-http://127.0.0.1:8000/docs
-```
-
----
 
 ## API Endpoints
 
 | Method | Endpoint | Description |
-|---------|----------|-------------|
-| GET | /tasks | Get all tasks |
-| GET | /tasks/{id} | Get a task by ID |
-| POST | /tasks | Create a new task |
-| PUT | /tasks/{id} | Update a task |
-| DELETE | /tasks/{id} | Delete a task |
+|---|---|---|
+| GET | `/tasks` | Get all tasks |
+| GET | `/tasks/{id}` | Get task by ID |
+| POST | `/tasks` | Create task |
+| PUT | `/tasks/{id}` | Update task |
+| DELETE | `/tasks/{id}` | Delete task |
 
----
+## Configuration
 
-## Example SQL Queries
+Database connection is stored in `.env`:
 
-List every task
-
-```sql
-SELECT * FROM tasks;
+```env
+DATABASE_URL=postgresql://taskuser:taskpassword@db:5432/taskdb
 ```
 
-Show completed tasks
+`.env` is gitignored and `.env.example` is included for setup.
 
-```sql
-SELECT * FROM tasks WHERE done = 1;
+## Run the Project
+
+Make sure Docker Desktop is running, then:
+
+```bash
+docker compose up --build
 ```
 
-Count all tasks
+API:
 
-```sql
-SELECT COUNT(*) FROM tasks;
+```text
+http://localhost:8000
 ```
 
-Mark all tasks as completed
+Swagger:
 
-```sql
-UPDATE tasks SET done = 1;
+```text
+http://localhost:8000/docs
 ```
 
-Delete completed tasks
+## Database
 
-```sql
-DELETE FROM tasks WHERE done = 1;
+PostgreSQL automatically creates the `tasks` table and seeds the initial tasks when the table is empty.
+
+The database uses a Docker volume:
+
+```text
+postgres_data
 ```
 
----
+so data persists across container restarts.
 
-## API Screenshot
+## Persistence Test
 
+A task was created through the API, then the stack was restarted:
 
+```bash
+docker compose down
+docker compose up -d
+```
+
+The task was still present after restarting, confirming database persistence.
+
+## Screenshots
+
+### Swagger API
 
 ![Swagger UI](images/swagger-ui.png)
 
----
+### PostgreSQL Database
 
-## Database Screenshot
-
-
-
-![Database Viewer](images/database-viewer.png)
-
----
-
-## HTTP Status Codes
-
-| Status Code | Meaning |
-|-------------|---------|
-| 200 | Success |
-| 201 | Task Created |
-| 204 | Task Deleted |
-| 400 | Invalid Request |
-| 404 | Task Not Found |
-
----
-
-## Sample Response
-
-```json
-[
-  {
-    "id": 1,
-    "title": "Learn FastAPI",
-    "done": false
-  },
-  {
-    "id": 2,
-    "title": "Build CRUD API",
-    "done": false
-  },
-  {
-    "id": 3,
-    "title": "Push to GitHub",
-    "done": false
-  }
-]
-```
-
----
+![PostgreSQL Database](images/postgres-docker.png)
 
 ## Author
 
-Aryaman Dutta
-
-Backend Development Internship - FlyRank
+**Aryaman Dutta**

@@ -1,0 +1,33 @@
+services:
+
+  db:
+    image: postgres:16
+    container_name: taskapi-postgres
+
+    environment:
+      POSTGRES_DB: taskdb
+      POSTGRES_USER: taskuser
+      POSTGRES_PASSWORD: taskpassword
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  app:
+    build: .
+    container_name: taskapi-app
+
+    env_file:
+      - .env
+
+    ports:
+      - "8000:8000"
+
+    depends_on:
+      - db
+
+
+volumes:
+  postgres_data:
